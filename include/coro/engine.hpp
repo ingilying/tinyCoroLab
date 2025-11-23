@@ -13,6 +13,7 @@
 #include <array>
 #include <atomic>
 #include <coroutine>
+#include <cstdint>
 #include <functional>
 #include <queue>
 
@@ -22,13 +23,14 @@
 #include "coro/meta_info.hpp"
 #include "coro/uring_proxy.hpp"
 
+
 namespace coro
 {
 class context;
 };
 
 /**
- * @brief Welcome to tinycoro lab2a, in this part you will build the heart of tinycoro¡ª¡ªengine by
+ * @brief Welcome to tinycoro lab2a, in this part you will build the heart of tinycoroï¿½ï¿½ï¿½ï¿½engine by
  * modifing engine.hpp and engine.cpp, please ensure you have read the document of lab2a.
  *
  * @warning You should carefully consider whether each implementation should be thread-safe.
@@ -58,6 +60,10 @@ using mpmc_queue = AtomicQueue<T>;
 
 class engine
 {
+    // some mask to differ different type of event state
+    static constexpr uint64_t task_mask = (0xFFFFF00000000000);
+    static constexpr uint64_t cqe_mask  = (0x0000000000FFFFFF);
+    static constexpr uint64_t task_flag = (((uint64_t)1) << 44);
     friend class ::coro::context;
 
 public:
@@ -167,6 +173,8 @@ public:
 
     // TODO[lab2a]: Add more function if you need
 
+    inline auto wakeup(uint64_t state) noexcept -> void;
+
 private:
     uint32_t    m_id;
     uring_proxy m_upxy;
@@ -178,6 +186,8 @@ private:
     array<urcptr, config::kQueCap> m_urc;
 
     // TODO[lab2a]: Add more member variables if you need
+    uint32_t m_waiting_io{0};
+    uint32_t m_running_io{0};
 };
 
 /**
