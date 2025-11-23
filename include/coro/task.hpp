@@ -45,24 +45,49 @@ namespace detail
 {
 struct promise_base
 {
+    enum class detach_state : uint8_t
+    {
+        attached,
+        detached,
+        none,
+    };
+    friend struct final_awaiter;
+    struct final_awaiter
+    {
+        constexpr bool await_ready() noexcept { return false; }
+        template<typename promise_type>
+        auto await_suspend(std::coroutine_handle<promise_type> handle) noexcept -> std::coroutine_handle<>
+        {
+            auto& promise = handle.promise();
+            return promise.m_continuation == nullptr ? std::noop_coroutine() : promise.m_continuation;
+        }
+        constexpr void await_resume() noexcept {}
+    };
+
     promise_base() noexcept = default;
     ~promise_base()         = default;
 
     constexpr auto initial_suspend() noexcept { return std::suspend_always{}; }
 
-    [[CORO_TEST_USED(lab1)]] auto final_suspend() noexcept -> std::suspend_always
+    [[CORO_TEST_USED(lab1)]] auto final_suspend() noexcept -> final_awaiter
     {
         // TODO[lab1]: Add you codes
         // Return suspend_always is incorrect,
         // so you should modify the return type and define new awaiter to return
-        return {};
+        return final_awaiter{};
     }
 
+    auto continue_with(std::coroutine_handle<> continuation) noexcept { m_continuation = continuation; }
+
+    auto detach() noexcept { m_state = detach_state::detached; }
+
+    auto is_detached() const noexcept -> bool { return m_state == detach_state::detached; }
+
+public:
+    std::coroutine_handle<> m_continuation{nullptr};
+    detach_state            m_state{detach_state::attached};
 #ifdef ENABLE_MEMORY_ALLOC
-    void* operator new(std::size_t size)
-    {
-        return ::coro::detail::ginfo.mem_alloc->allocate(size);
-    }
+    void* operator new(std::size_t size) { return ::coro::detail::ginfo.mem_alloc->allocate(size); }
 
     void operator delete(void* ptr, [[CORO_MAYBE_UNUSED]] std::size_t size)
     {
@@ -90,9 +115,7 @@ public:
         promise_id = id;
     }
 #endif // DEBUG
-    promise() noexcept
-    {
-    }
+    promise() noexcept {}
     promise(const promise&)             = delete;
     promise(promise&& other)            = delete;
     promise& operator=(const promise&)  = delete;
@@ -101,10 +124,7 @@ public:
 
     auto get_return_object() noexcept -> task_type;
 
-    auto unhandled_exception() noexcept -> void
-    {
-        this->set_exception();
-    }
+    auto unhandled_exception() noexcept -> void { this->set_exception(); }
 };
 
 template<>
@@ -129,14 +149,9 @@ struct promise<void> : public promise_base
 
     auto get_return_object() noexcept -> task_type;
 
-    constexpr auto return_void() noexcept -> void
-    {
-    }
+    constexpr auto return_void() noexcept -> void {}
 
-    auto unhandled_exception() noexcept -> void
-    {
-        m_exception_ptr = std::current_exception();
-    }
+    auto unhandled_exception() noexcept -> void { m_exception_ptr = std::current_exception(); }
 
     auto result() -> void
     {
@@ -169,6 +184,7 @@ public:
         auto await_suspend(std::coroutine_handle<> awaiting_coroutine) noexcept -> std::coroutine_handle<>
         {
             // TODO[lab1]: Add you codes
+            m_coroutine.promise().continue_with(awaiting_coroutine);
             return m_coroutine;
         }
 
@@ -235,6 +251,9 @@ public:
     [[CORO_TEST_USED(lab1)]] auto detach() -> void
     {
         // TODO[lab1]: Add you codes
+        auto& promise = m_coroutine.promise();
+        promise.detach();
+        m_coroutine = nullptr;
     }
 
     auto operator co_await() const& noexcept
@@ -278,6 +297,12 @@ using coroutine_handle = std::coroutine_handle<detail::promise_base>;
 [[CORO_TEST_USED(lab1)]] inline auto clean(std::coroutine_handle<> handle) noexcept -> void
 {
     // TODO[lab1]: Add you codes
+    auto  specific_handle = std::coroutine_handle<detail::promise_base>::from_address(handle.address());
+    auto& promise         = specific_handle.promise();
+    if (promise.is_detached())
+    {
+        specific_handle.destroy();
+    }
 }
 
 namespace detail
