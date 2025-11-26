@@ -23,7 +23,6 @@
 #include "coro/meta_info.hpp"
 #include "coro/uring_proxy.hpp"
 
-
 namespace coro
 {
 class context;
@@ -173,7 +172,7 @@ public:
 
     // TODO[lab2a]: Add more function if you need
 
-    inline auto wakeup(uint64_t state) noexcept -> void;
+    auto wakeup(uint64_t state = task_flag) noexcept -> void;
 
 private:
     uint32_t    m_id;

@@ -1,4 +1,7 @@
 #include "coro/scheduler.hpp"
+#include <atomic>
+#include <cstddef>
+#include <vector>
 
 namespace coro
 {
@@ -15,6 +18,8 @@ auto scheduler::init_impl(size_t ctx_cnt) noexcept -> void
     }
     m_dispatcher.init(m_ctx_cnt, &m_ctxs);
 
+    m_stop_flag  = std::vector<stop_flag_type>(ctx_cnt, stop_flag_type{.val = 1});
+    m_stop_token = ctx_cnt;
 #ifdef ENABLE_MEMORY_ALLOC
     coro::allocator::memory::mem_alloc_config config;
     m_mem_alloc.init(config);
@@ -25,6 +30,25 @@ auto scheduler::init_impl(size_t ctx_cnt) noexcept -> void
 auto scheduler::loop_impl() noexcept -> void
 {
     // TODO[lab2b]: Add you codes
+    // start all contexts
+    for (size_t i = 0; i < m_ctx_cnt; ++i)
+    {
+        m_ctxs[i]->set_stop_callback(
+            [&, i]()
+            {
+                auto cnt = std::atomic_ref(this->m_stop_flag[i].val).fetch_and(0, std::memory_order_acq_rel);
+                if (m_stop_token.fetch_sub(cnt) == cnt)
+                {
+                    this->stop_impl();
+                }
+            });
+        m_ctxs[i]->start();
+    }
+    // wait all contexts stop
+    for (auto& i : m_ctxs)
+    {
+        i->join();
+    }
 }
 
 auto scheduler::stop_impl() noexcept -> void
@@ -42,6 +66,8 @@ auto scheduler::submit_task_impl(std::coroutine_handle<> handle) noexcept -> voi
 {
     // TODO[lab2b]: Add you codes
     size_t ctx_id = m_dispatcher.dispatch();
+    m_stop_token.fetch_add(
+        1 - std::atomic_ref(m_stop_flag[ctx_id].val).fetch_or(1, std::memory_order_acq_rel), std::memory_order_acq_rel);
     m_ctxs[ctx_id]->submit_task(handle);
 }
 }; // namespace coro

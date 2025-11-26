@@ -11,7 +11,10 @@
 #pragma once
 
 #include <atomic>
+#include <cstdint>
+#include <functional>
 #include <memory>
+#include <optional>
 #include <thread>
 
 #include "config.h"
@@ -60,6 +63,8 @@ class scheduler;
  */
 class context
 {
+    using stop_cb = std::function<void()>;
+
 public:
     context() noexcept;
     ~context() noexcept                = default;
@@ -137,6 +142,7 @@ public:
     [[CORO_TEST_USED(lab2b)]] auto run(stop_token token) noexcept -> void;
 
     // TODO[lab2b]: Add more function if you need
+    auto set_stop_callback(stop_cb cb) noexcept -> void { m_stop_callback = std::move(cb); }
 
 private:
     CORO_ALIGN engine   m_engine;
@@ -144,6 +150,8 @@ private:
     ctx_id              m_id;
 
     // TODO[lab2b]: Add more member variables if you need
+    std::atomic<int> m_register_count;
+    stop_cb          m_stop_callback;
 };
 
 inline context& local_context() noexcept

@@ -120,7 +120,7 @@ auto engine::empty_io() noexcept -> bool
     return m_waiting_io == 0 && m_running_io == 0;
 }
 
-auto engine::wakeup(uint64_t state) noexcept -> void
+auto engine::wakeup(uint64_t state ) noexcept -> void
 {
     m_upxy.write_eventfd(state);
 }

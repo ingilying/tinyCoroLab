@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "config.h"
+#include "coro/detail/atomic_helper.hpp"
 #ifdef ENABLE_MEMORY_ALLOC
     #include "coro/allocator/memory.hpp"
 #endif
@@ -22,6 +23,8 @@ namespace coro
 class scheduler
 {
     friend context;
+    using stop_token_type = std::atomic<int>;
+    using stop_flag_type  = detail::atomic_ref_wrapper<int>;
 
 public:
     [[CORO_TEST_USED(lab2b)]] inline static auto init(size_t ctx_cnt = std::thread::hardware_concurrency()) noexcept
@@ -76,7 +79,8 @@ private:
     detail::ctx_container                               m_ctxs;
     detail::dispatcher<coro::config::kDispatchStrategy> m_dispatcher;
     // TODO[lab2b]: Add more member variables if you need
-
+    std::vector<stop_flag_type> m_stop_flag;
+    stop_token_type             m_stop_token{0};
 #ifdef ENABLE_MEMORY_ALLOC
     // Memory Allocator
     coro::allocator::memory::memory_allocator<coro::config::kMemoryAllocator> m_mem_alloc;
